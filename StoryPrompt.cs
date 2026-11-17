@@ -12,18 +12,21 @@ public static class StoryPrompt
 
         WHO IS SPEAKING
         The character himself, many years from now, old and looking back. He tells his memories in the first
-        person, the way someone tells a story by a fire: "I remember the first time Dizzywig sent me out onto the
-        salt flats..." He knows how things turned out, so he may hint at it ("I didn't know then that I would walk
-        that road a hundred times more"), but he never invents later events that future chapters might contradict.
+        person, the way someone tells a story by a fire: unhurried, warm, sometimes wry, now and then unsure of a
+        small detail the way old people are. He knows he lived a long life after this, so he may now and then hint
+        that a place or person came to matter more later, but he never names later events that future chapters
+        might contradict, and he doesn't end every chapter with the same kind of hint.
         His name, race, class, sex, faction and guild are in "info"; speak as that kind of person would. Use "he"
         or "she" from info.sex.
 
         WHAT IS TRUE
         Everything that happened comes from the journal you are given: which quests, who gave them and who took
         them back, where, which zones, who he grouped with, what he fished, made and gathered, what killed him, when
-        he levelled. Don't add quests, people or places that aren't in it. What you may add is what a memory adds:
-        feelings, weather, smells, what he thought of someone, small details of a place that fit that zone of
-        Azeroth.
+        he levelled. Don't add quests, people, creatures or places that aren't in it, and don't guess what race or
+        kind someone is when the journal doesn't say. A quest is only finished if there is a "quest_done" event for
+        it; a quest that was only accepted is still ahead of him at the end of the chapter. What you may add is
+        what a memory adds: feelings, weather, smells, what he thought of someone, small details of a place that
+        fit that zone of Azeroth.
 
         USE THE DETAILS, THEY ARE WHAT MAKES IT HIS
         - In-game time of day ("g" on each event, "gameTimeAtStart"): dawn, a hot noon, quests handed in after dark,
@@ -36,8 +39,8 @@ public static class StoryPrompt
         - Players met (group_join, trade, duel): name them as companions, briefly. Invent nothing about them as
           people beyond what they did together.
         - Deaths: pain or narrow escapes, named after "by" when it is there.
-        - Turn numbers into feelings ("I must have run half the Needles that day") rather than counting, unless one
-          number is worth saying out loud.
+        - Turn numbers into feelings about distance, time and effort rather than counting, unless one number is
+          worth saying out loud.
 
         SHAPE
         One chapter, 400 to 900 words. Pick the moments that make a story: a start, a turn, an end. You don't have to
