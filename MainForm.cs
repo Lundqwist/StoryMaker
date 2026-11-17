@@ -35,6 +35,7 @@ public class MainForm : Form
 
     readonly Button writeButton = new() { Text = "Write chapter", AutoSize = true, Padding = new Padding(8, 2, 8, 2) };
     readonly Button postButton = new() { Text = "Post to lundqwist.se", AutoSize = true, Padding = new Padding(8, 2, 8, 2), Enabled = false };
+    readonly Button saveButton = new() { Text = "Save as Markdown...", AutoSize = true, Padding = new Padding(8, 2, 8, 2), Enabled = false };
     readonly Button openButton = new() { Text = "Open the story page", AutoSize = true };
     readonly Label status = new() { AutoSize = true, Padding = new Padding(10, 7, 0, 0) };
 
@@ -66,7 +67,7 @@ public class MainForm : Form
         split.Panel2.Controls.Add(right);
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(6), WrapContents = false };
-        bottom.Controls.AddRange([writeButton, postButton, openButton, status]);
+        bottom.Controls.AddRange([writeButton, postButton, saveButton, openButton, status]);
 
         Controls.Add(split);
         Controls.Add(bottom);
@@ -86,8 +87,9 @@ public class MainForm : Form
         settingsButton.Click += (_, _) => OpenSettings();
         writeButton.Click += async (_, _) => await WriteChapter();
         postButton.Click += async (_, _) => await PostChapter();
+        saveButton.Click += (_, _) => SaveChapter();
         openButton.Click += (_, _) => OpenPage();
-        chapter.TextChanged += (_, _) => postButton.Enabled = running is null && chapter.Text.Trim().Length > 0 && journal is not null;
+        chapter.TextChanged += (_, _) => postButton.Enabled = saveButton.Enabled = running is null && chapter.Text.Trim().Length > 0 && journal is not null;
         FormClosing += (_, _) => { running?.Cancel(); settings.Save(); };
 
         Theme.Choose(settings.Theme);
@@ -182,7 +184,7 @@ public class MainForm : Form
     {
         bool busy = message is not null;
         writeButton.Text = busy ? "Stop" : "Write chapter";
-        postButton.Enabled = !busy && chapter.Text.Trim().Length > 0 && journal is not null;
+        postButton.Enabled = saveButton.Enabled = !busy && chapter.Text.Trim().Length > 0 && journal is not null;
         characterBox.Enabled = aiBox.Enabled = modelBox.Enabled = settingsButton.Enabled = reloadButton.Enabled = !busy;
         UseWaitCursor = busy;
         if (busy) status.Text = message;
@@ -207,17 +209,29 @@ public class MainForm : Form
         {
             var writer = Writers.For(profile);
 
-            Busy("Reading the story so far from the website...");
+            Busy("Reading the story so far...");
             string previous;
-            try
+            var saved = SavedChapters(journal.File);
+            if (Settings.Secret(settings.SiteTokenVariable) is null && saved.Count > 0)
             {
-                previous = await SiteApi().Story(Game, journal.File.Slug, running.Token);
+                // No website set up: the chapters saved on this PC are the story so far
+                previous = string.Join("\n\n", saved.Select(File.ReadAllText));
             }
-            catch (AiException e)
+            else
             {
-                if (MessageBox.Show(this, e.Message + "\n\nWrite the chapter without knowing the story so far?", Text,
-                        MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) { status.Text = ""; return; }
-                previous = "";
+                try
+                {
+                    previous = await SiteApi().Story(Game, journal.File.Slug, running.Token);
+                }
+                catch (AiException e)
+                {
+                    var fallback = saved.Count > 0
+                        ? $"\n\nWrite the chapter from the {saved.Count} chapter(s) saved on this PC instead?"
+                        : "\n\nWrite the chapter without knowing the story so far?";
+                    if (MessageBox.Show(this, e.Message + fallback, Text,
+                            MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) { status.Text = ""; return; }
+                    previous = string.Join("\n\n", saved.Select(File.ReadAllText));
+                }
             }
 
             Busy($"Writing with {AiProfile.Title(profile.Kind).Split(' ')[0]} ({profile.Model})... this can take a minute or two.");
@@ -225,7 +239,7 @@ public class MainForm : Form
             var started = DateTime.Now;
             var text = await writer.Write(StoryPrompt.System, user, running.Token);
             chapter.Text = StoryPrompt.Clean(text);
-            status.Text = $"Written in {(DateTime.Now - started).TotalSeconds:0} s by {profile.Model}. Read it, edit it if you like, then post it.";
+            status.Text = $"Written in {(DateTime.Now - started).TotalSeconds:0} s by {profile.Model}. Read it, edit it if you like, then post or save it.";
         }
         catch (OperationCanceledException)
         {
@@ -287,6 +301,68 @@ public class MainForm : Form
             running = null;
             Busy(null);
         }
+    }
+
+    // ---------------------------------------------------------------- saving on this PC
+
+    static readonly string DefaultSaveRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Lunar Journal");
+
+    /// <summary>The folder a character's chapters are saved in: the last one used, or Documents\Lunar Journal\&lt;Character&gt;.</summary>
+    string SaveFolder(JournalFile file) =>
+        settings.SaveFolders.TryGetValue(file.Slug, out var dir) && Directory.Exists(dir) ? dir : Path.Combine(DefaultSaveRoot, file.Character);
+
+    /// <summary>Chapters already saved for the character, in order (file names start with their number).</summary>
+    List<string> SavedChapters(JournalFile file)
+    {
+        var dir = SaveFolder(file);
+        return Directory.Exists(dir) ? Directory.GetFiles(dir, "*.md").Order(StringComparer.OrdinalIgnoreCase).ToList() : [];
+    }
+
+    /// <summary>"002 The Road to Razor Hill.md": the chapter's number and its title (the first # line).</summary>
+    public static string SuggestedName(int number, string text)
+    {
+        var title = text.Replace("\r\n", "\n").Split('\n').FirstOrDefault(l => l.StartsWith('#'))?.TrimStart('#').Trim();
+        if (string.IsNullOrWhiteSpace(title)) title = "Chapter";
+        var safe = new string(title.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? ' ' : ch).ToArray()).Trim();
+        safe = System.Text.RegularExpressions.Regex.Replace(safe, @"\s+", " ");
+        if (safe.Length > 60) safe = safe[..60].Trim();
+        return $"{number:000} {safe}.md";
+    }
+
+    /// <summary>Markdown as it is on the website: UTF-8 without BOM, plain line ends.</summary>
+    public static void WriteMarkdown(string path, string text) =>
+        File.WriteAllText(path, text.Replace("\r\n", "\n").Trim() + "\n", new System.Text.UTF8Encoding(false));
+
+    void SaveChapter()
+    {
+        if (journal is null || chapter.Text.Trim().Length == 0) return;
+        var dir = SaveFolder(journal.File);
+        Directory.CreateDirectory(dir);
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = $"Save {journal.File.Character}'s chapter",
+            InitialDirectory = dir,
+            FileName = SuggestedName(SavedChapters(journal.File).Count + 1, chapter.Text),
+            Filter = "Markdown (*.md)|*.md|Text (*.txt)|*.txt|All files|*.*",
+            DefaultExt = "md",
+            OverwritePrompt = true,
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        WriteMarkdown(dialog.FileName, chapter.Text);
+        settings.SaveFolders[journal.File.Slug] = Path.GetDirectoryName(dialog.FileName)!;
+
+        var ticked = Ticked();
+        if (ticked.Count > 0 && MessageBox.Show(this,
+                $"Saved.\n\nCount the {ticked.Count} ticked session(s) as told, so they aren't ticked for the next chapter?",
+                Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+        {
+            settings.Told[journal.File.Slug] = Math.Max(Told, ticked.Max(Journal.Id));
+            FillSessions();
+        }
+        settings.Save();
+        status.Text = $"Saved to {dialog.FileName}";
     }
 
     void OpenPage()
