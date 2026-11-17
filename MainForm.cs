@@ -122,6 +122,18 @@ public class MainForm : Form
         ShowHome();
     }
 
+    /// <summary>Is World of Warcraft open? (Wow.exe; the Classic clients have their own names.)</summary>
+    static bool GameIsRunning()
+    {
+        foreach (var name in new[] { "Wow", "WowClassic", "WowClassicT", "WowT", "WowB" })
+        {
+            var found = System.Diagnostics.Process.GetProcessesByName(name);
+            foreach (var p in found) p.Dispose();
+            if (found.Length > 0) return true;
+        }
+        return false;
+    }
+
     // ---------------------------------------------------------------- front page
 
     void ShowHome()
@@ -271,7 +283,19 @@ public class MainForm : Form
         var profile = settings.Profile(settings.Ai);
         profile.Model = modelBox.Text.Trim();
         settings.Save();
+
+        // A local model shares the graphics card with the game; with both running it can take very long
+        if (profile.Kind == AiKind.Ollama && GameIsRunning() &&
+            MessageBox.Show(this,
+                "World of Warcraft is running. The AI on this PC (Ollama) shares the graphics card with the game, " +
+                "and with both running a chapter can take many minutes, or not come at all.\n\n" +
+                "For a quick chapter, close the game first (log out isn't enough; exit it).\n\nWrite anyway?",
+                Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            return;
+
         running = new CancellationTokenSource();
+        var stoppedByUser = false;
+        running.Token.Register(() => stoppedByUser = true);
         try
         {
             var writer = Writers.For(profile);
@@ -304,14 +328,31 @@ public class MainForm : Form
             Busy($"Writing with {AiProfile.Title(profile.Kind).Split(' ')[0]} ({profile.Model})... this can take a minute or two.");
             var user = StoryPrompt.User(journal.Digest(sessions), previous, (settings.ExtraInstructions + "\n" + wishes.Text).Trim());
             var started = DateTime.Now;
-            var text = await writer.Write(StoryPrompt.System, user, running.Token);
             ShowEditor();
+            // AIs that stream (Ollama) show the chapter as it is written
+            var partial = new Progress<string>(soFar =>
+            {
+                chapter.Text = soFar.Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
+                chapter.SelectionStart = chapter.TextLength;
+                chapter.ScrollToCaret();
+                var words = soFar.Split((char[])[' ', '\n'], StringSplitOptions.RemoveEmptyEntries).Length;
+                status.Text = $"Writing with {profile.Model}... {words} words so far ({(DateTime.Now - started).TotalSeconds:0} s). Stop ends it.";
+            });
+            var text = await writer.Write(StoryPrompt.System, user, running.Token, partial);
             chapter.Text = StoryPrompt.Clean(text);
+            chapter.Select(0, 0);
             status.Text = $"Written in {(DateTime.Now - started).TotalSeconds:0} s by {profile.Model}. Read it, edit it if you like, then post or save it.";
+        }
+        catch (OperationCanceledException) when (stoppedByUser)
+        {
+            status.Text = "Stopped.";
         }
         catch (OperationCanceledException)
         {
-            status.Text = "Stopped.";
+            // not the Stop button: a time limit ran out
+            status.Text = "";
+            MessageBox.Show(this, $"{AiProfile.Title(profile.Kind)} didn't answer in time, so the chapter was given up. Try again in a while" +
+                (profile.Kind == AiKind.Ollama ? ", ideally with the game closed." : "."), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (AiException e)
         {

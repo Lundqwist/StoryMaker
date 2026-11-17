@@ -9,7 +9,8 @@ namespace StoryMaker;
 /// <summary>An AI that writes a chapter: gets the system prompt and the request, returns the text.</summary>
 public interface IStoryWriter
 {
-    Task<string> Write(string system, string user, CancellationToken cancel);
+    /// <summary><paramref name="partial"/>, when the AI can stream, gets the text so far as it is written.</summary>
+    Task<string> Write(string system, string user, CancellationToken cancel, IProgress<string>? partial = null);
 }
 
 public class AiException(string message) : Exception(message);
@@ -45,7 +46,7 @@ public class ClaudeWriter(string key, string model) : IStoryWriter
     // Models that can hand a refused request on to another model by themselves (server-side fallbacks)
     static readonly string[] WithFallbacks = ["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-2", "claude-fable-5-1"];
 
-    public async Task<string> Write(string system, string user, CancellationToken cancel)
+    public async Task<string> Write(string system, string user, CancellationToken cancel, IProgress<string>? partial = null)
     {
         var client = new AnthropicClient { ApiKey = key };
         var parameters = new MessageCreateParams
@@ -84,7 +85,7 @@ public class ClaudeWriter(string key, string model) : IStoryWriter
 /// <summary>OpenAI, or anything that speaks its chat completions API (Ollama, LM Studio, OpenRouter, ...).</summary>
 public class OpenAiWriter(string? key, string model, string baseUrl) : IStoryWriter
 {
-    public async Task<string> Write(string system, string user, CancellationToken cancel)
+    public async Task<string> Write(string system, string user, CancellationToken cancel, IProgress<string>? partial = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, baseUrl.TrimEnd('/') + "/chat/completions")
         {
@@ -134,7 +135,7 @@ public class OllamaWriter(string model, string baseUrl) : IStoryWriter
 {
     public const string DefaultUrl = "http://localhost:11434";
 
-    public async Task<string> Write(string system, string user, CancellationToken cancel)
+    public async Task<string> Write(string system, string user, CancellationToken cancel, IProgress<string>? partial = null)
     {
         // About 3.5 characters per token, plus room for the chapter; rounded up to whole 8k steps
         var needed = (system.Length + user.Length) / 3.5 + 4000;
@@ -144,7 +145,7 @@ public class OllamaWriter(string model, string baseUrl) : IStoryWriter
             Content = JsonContent.Create(new
             {
                 model,
-                stream = false,
+                stream = true,
                 messages = new object[]
                 {
                     new { role = "system", content = system },
@@ -153,23 +154,69 @@ public class OllamaWriter(string model, string baseUrl) : IStoryWriter
                 options = new { num_ctx = numCtx, temperature = 0.8 },
             }),
         };
-        JsonNode json;
+        // Streamed: the chapter shows up as it is written, and there is no time limit as long as words
+        // keep coming. A local model can be slow (for example while a game uses the graphics card); only
+        // if nothing at all arrives for StallMinutes is it given up.
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        stall.CancelAfter(TimeSpan.FromMinutes(StallMinutes));
+        HttpResponseMessage response;
         try
         {
-            json = await OpenAiWriter.Send(request, cancel);
+            response = await Streaming.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stall.Token);
         }
-        catch (AiException e) when (e.Message.StartsWith("Couldn't reach"))
+        catch (HttpRequestException)
         {
             throw new AiException("Ollama isn't running. Start it from the Start menu (Ollama), then try again.");
         }
-        catch (AiException e) when (e.Message.Contains("not found"))
+        catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
         {
-            throw new AiException($"Ollama doesn't have the model {model}. Download it with: ollama pull {model}");
+            throw new AiException(StalledMessage);
         }
-        var text = (string?)json["message"]?["content"];
-        if (string.IsNullOrWhiteSpace(text)) throw new AiException("Ollama answered with no text.");
-        return text;
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancel);
+                throw new AiException(body.Contains("not found")
+                    ? $"Ollama doesn't have the model {model}. Download it with: ollama pull {model}"
+                    : $"Ollama answered {(int)response.StatusCode}: {(body.Length > 300 ? body[..300] : body)}");
+            }
+            var text = new System.Text.StringBuilder();
+            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(cancel));
+            try
+            {
+                while (await reader.ReadLineAsync(stall.Token) is { } line)
+                {
+                    if (line.Length == 0) continue;
+                    var chunk = JsonNode.Parse(line);
+                    if ((string?)chunk?["error"] is { } error) throw new AiException("Ollama: " + error);
+                    var piece = (string?)chunk?["message"]?["content"];
+                    if (!string.IsNullOrEmpty(piece))
+                    {
+                        text.Append(piece);
+                        partial?.Report(text.ToString());
+                        stall.CancelAfter(TimeSpan.FromMinutes(StallMinutes));   // words are coming: wait on
+                    }
+                    if (chunk?["done"]?.GetValue<bool>() == true) break;
+                }
+            }
+            catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
+            {
+                throw new AiException(StalledMessage);
+            }
+            if (text.ToString().Trim().Length == 0) throw new AiException("Ollama answered with no text.");
+            return text.ToString();
+        }
     }
+
+    const int StallMinutes = 5;
+    const string StalledMessage =
+        "Ollama stopped answering for 5 minutes, so the chapter was given up.\n\n" +
+        "This usually means the graphics card is busy: World of Warcraft (or another game) uses most of its " +
+        "memory, and the AI model no longer fits. Close the game and try again, or pick a smaller model.";
+
+    // No overall time limit for a streamed answer (Stop and the stall check end it instead)
+    static readonly HttpClient Streaming = new() { Timeout = Timeout.InfiniteTimeSpan };
 
     /// <summary>The models Ollama has downloaded, or none when it isn't running.</summary>
     public static async Task<List<string>> Installed(string baseUrl)
@@ -190,7 +237,7 @@ public class OllamaWriter(string model, string baseUrl) : IStoryWriter
 /// <summary>Google's Gemini, through its generateContent API.</summary>
 public class GeminiWriter(string key, string model) : IStoryWriter
 {
-    public async Task<string> Write(string system, string user, CancellationToken cancel)
+    public async Task<string> Write(string system, string user, CancellationToken cancel, IProgress<string>? partial = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post,
             $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:generateContent")
