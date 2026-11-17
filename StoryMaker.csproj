@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- drawn by tools\make-icon.ps1 -->
+    <ApplicationIcon>StoryMaker.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

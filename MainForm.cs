@@ -13,6 +13,7 @@ public class MainForm : Form
 
     readonly Settings settings = Settings.Load();
     Journal? journal;
+    string? lastPosted;     // the page of the chapter just posted, for the Open button
     CancellationTokenSource? running;
 
     readonly ComboBox characterBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 210 };
@@ -139,6 +140,8 @@ public class MainForm : Form
             journalInfo.Text = "Couldn't read the journal: " + e.Message;
             return;
         }
+        lastPosted = null;
+        openButton.Text = "Open the story page";
         settings.LastCharacter = file.Slug;
         settings.Save();
         FillSessions();
@@ -250,7 +253,7 @@ public class MainForm : Form
         var site = SiteApi();
         var ticked = Ticked();
         var page = site.PageUrl(Game, journal.File.Slug);
-        var question = $"Add this chapter to the end of {journal.File.Character}'s story?\n\n{page}\n\n" +
+        var question = $"Post this as the next chapter of {journal.File.Character}'s story?\n\n{page}\n\n" +
             (ticked.Count > 0 ? $"The {ticked.Count} ticked session(s) will then count as told." : "No sessions are ticked, so none will count as told.");
         if (MessageBox.Show(this, question, Text, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
 
@@ -258,7 +261,7 @@ public class MainForm : Form
         try
         {
             Busy("Posting...");
-            await site.Post(Game, journal.File.Slug, chapter.Text, replace: false, running.Token);
+            var number = await site.Post(Game, journal.File.Slug, chapter.Text, running.Token);
             if (ticked.Count > 0)
             {
                 settings.Told[journal.File.Slug] = Math.Max(Told, ticked.Max(Journal.Id));
@@ -267,7 +270,9 @@ public class MainForm : Form
             chapter.Text = "";
             wishes.Text = "";
             FillSessions();
-            status.Text = $"Posted to {page}";
+            lastPosted = number > 0 ? site.ChapterUrl(Game, journal.File.Slug, number) : page;
+            status.Text = number > 0 ? $"Posted as chapter {number}: {lastPosted}" : $"Posted to {page}";
+            openButton.Text = "Open the new chapter";
         }
         catch (AiException e)
         {
@@ -285,7 +290,7 @@ public class MainForm : Form
     void OpenPage()
     {
         if (journal is null) return;
-        Process.Start(new ProcessStartInfo(SiteApi().PageUrl(Game, journal.File.Slug)) { UseShellExecute = true });
+        Process.Start(new ProcessStartInfo(lastPosted ?? SiteApi().PageUrl(Game, journal.File.Slug)) { UseShellExecute = true });
     }
 
     void OpenSettings()

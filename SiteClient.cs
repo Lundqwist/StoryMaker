@@ -8,7 +8,7 @@ namespace StoryMaker;
 /// <summary>
 /// The WowCharacters site's story API (see github.com/Lundqwist/WowCharacters, Program.cs):
 ///   GET  {site}/api/forever/story?c=&lt;key&gt;                      -> { markdown }
-///   POST {site}/api/forever/story?c=&lt;key&gt;  { markdown, replace }
+///   POST {site}/api/forever/story?c=&lt;key&gt;  { markdown }       -> { chapter }: saved as a new chapter
 /// Both need "Authorization: Bearer &lt;STORY_TOKEN&gt;".
 /// </summary>
 public class SiteClient(string siteUrl, string? token)
@@ -16,6 +16,8 @@ public class SiteClient(string siteUrl, string? token)
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     public string PageUrl(string game, string key) => $"{siteUrl.TrimEnd('/')}/{game}/character.html?c={Uri.EscapeDataString(key)}";
+
+    public string ChapterUrl(string game, string key, int chapter) => $"{siteUrl.TrimEnd('/')}/{game}/chapter.html?c={Uri.EscapeDataString(key)}&n={chapter}";
 
     string ApiUrl(string game, string key) => $"{siteUrl.TrimEnd('/')}/api/{game}/story?c={Uri.EscapeDataString(key)}";
 
@@ -34,11 +36,14 @@ public class SiteClient(string siteUrl, string? token)
         return (string?)json?["markdown"] ?? "";
     }
 
-    public async Task Post(string game, string key, string markdown, bool replace, CancellationToken cancel = default)
+    /// <summary>Saves the text as a new chapter; returns its number.</summary>
+    public async Task<int> Post(string game, string key, string markdown, CancellationToken cancel = default)
     {
         var request = Request(HttpMethod.Post, ApiUrl(game, key));
-        request.Content = JsonContent.Create(new { markdown, replace });
-        using var _ = await Send(request, key, cancel);
+        request.Content = JsonContent.Create(new { markdown });
+        using var response = await Send(request, key, cancel);
+        var json = await response.Content.ReadFromJsonAsync<JsonObject>(cancel);
+        return (int?)json?["chapter"] ?? 0;
     }
 
     static async Task<HttpResponseMessage> Send(HttpRequestMessage request, string key, CancellationToken cancel)
