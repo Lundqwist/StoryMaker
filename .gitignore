@@ -3,3 +3,4 @@ obj/
 publish/
 dist/
 *.csproj.user
+msix/store-identity.json

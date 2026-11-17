@@ -1,6 +1,6 @@
 # make-icon.ps1 - draws StoryMaker's icon: an old leather-bound book with gold corners, a clasp
 # and a crescent moon on the cover. Writes StoryMaker.ico (16, 24, 32, 48, 64, 128 and 256 pixels)
-# and book-256.png next to the project file.
+# and book-256.png (and book-512.png, for the Store tiles) next to the project file.
 #
 #     .\tools\make-icon.ps1
 
@@ -158,4 +158,8 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 }
 foreach ($img in $images) { $w.Write([byte[]]$img) }
 [IO.File]::WriteAllBytes((Join-Path $out 'StoryMaker.ico'), $file.ToArray())
-Write-Host "Wrote $(Join-Path $out 'StoryMaker.ico') and book-256.png"
+# a big one for the Store tiles (tools\make-store-assets.ps1)
+$big = Draw 512
+$big.Save((Join-Path $out 'book-512.png'), [Drawing.Imaging.ImageFormat]::Png)
+$big.Dispose()
+Write-Host "Wrote $(Join-Path $out 'StoryMaker.ico'), book-256.png and book-512.png"
