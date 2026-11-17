@@ -33,8 +33,22 @@ public class MainForm : Form
         Font = new Font("Georgia", 11f), PlaceholderText = "The chapter appears here. You can edit it before you post it.",
     };
 
-    readonly Button writeButton = new() { Text = "Write chapter", AutoSize = true, Padding = new Padding(8, 2, 8, 2) };
-    readonly Button postButton = new() { Text = "Post to lundqwist.se", AutoSize = true, Padding = new Padding(8, 2, 8, 2), Enabled = false };
+    // The chapter can also be shown as it will look (pictures, sounds, formatting)
+    readonly WebBrowser preview = new()
+    {
+        Dock = DockStyle.Fill, Visible = false, ScriptErrorsSuppressed = true,
+        IsWebBrowserContextMenuEnabled = false, AllowWebBrowserDrop = false, WebBrowserShortcutsEnabled = true,
+    };
+    readonly FlowLayoutPanel formatBar = new() { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Padding = new Padding(0, 0, 0, 4) };
+    readonly Button previewButton = new() { Text = "Preview", AutoSize = true, Padding = new Padding(6, 0, 6, 0) };
+
+    readonly Button writeButton = new() { Text = "Write chapter", AutoSize = true, Padding = new Padding(8, 2, 8, 2), Tag = "primary" };
+    readonly Button postButton = new() { Text = "Post to lundqwist.se", AutoSize = true, Padding = new Padding(8, 2, 8, 2), Enabled = false, Tag = "primary" };
+
+    // The front page (lundqwist.se's emblem and a card per character), the writing view, and the band above both
+    readonly HomeView home = new() { Dock = DockStyle.Fill };
+    readonly HeaderBand header = new();
+    readonly Panel editor = new() { Dock = DockStyle.Fill, Visible = false };
     readonly Button saveButton = new() { Text = "Save as Markdown...", AutoSize = true, Padding = new Padding(8, 2, 8, 2), Enabled = false };
     readonly Button openButton = new() { Text = "Open the story page", AutoSize = true };
     readonly Label status = new() { AutoSize = true, Padding = new Padding(10, 7, 0, 0) };
@@ -59,8 +73,11 @@ public class MainForm : Form
 
         var right = new Panel { Dock = DockStyle.Fill, Padding = new Padding(6) };
         right.Controls.Add(chapter);
+        right.Controls.Add(preview);
+        right.Controls.Add(formatBar);
         right.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 6 });
         right.Controls.Add(wishes);
+        BuildFormatBar();
 
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 430, FixedPanel = FixedPanel.Panel1 };
         split.Panel1.Controls.Add(left);
@@ -69,10 +86,17 @@ public class MainForm : Form
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(6), WrapContents = false };
         bottom.Controls.AddRange([writeButton, postButton, saveButton, openButton, status]);
 
-        Controls.Add(split);
-        Controls.Add(bottom);
-        Controls.Add(top);
-        Shown += (_, _) => split.SplitterDistance = 430;
+        editor.Controls.Add(split);
+        editor.Controls.Add(bottom);
+        editor.Controls.Add(top);
+        Controls.Add(editor);
+        Controls.Add(home);
+        Controls.Add(header);
+        header.HomeButton.Visible = false;
+        header.HomeButton.Click += (_, _) => ShowHome();
+        home.CharacterChosen += ShowWriting;
+        // the sessions list keeps its width when the writing view is shown (the divider only takes it once visible)
+        editor.VisibleChanged += (_, _) => { if (editor.Visible) BeginInvoke(() => { if (split.Width > 700) split.SplitterDistance = 430; }); };
 
         foreach (var kind in Enum.GetValues<AiKind>()) aiBox.Items.Add(AiProfile.Title(kind));
         aiBox.SelectedIndex = (int)settings.Ai;
@@ -95,6 +119,48 @@ public class MainForm : Form
         Theme.Choose(settings.Theme);
         Theme.Apply(this);
         FindJournals();
+        ShowHome();
+    }
+
+    // ---------------------------------------------------------------- front page
+
+    void ShowHome()
+    {
+        RefreshHome();
+        editor.Visible = false;
+        home.Visible = true;
+        header.HomeButton.Visible = false;
+    }
+
+    void ShowWriting(JournalFile file)
+    {
+        var index = characterBox.Items.IndexOf(file);
+        if (index >= 0 && characterBox.SelectedIndex != index) characterBox.SelectedIndex = index;
+        home.Visible = false;
+        editor.Visible = true;
+        header.HomeButton.Visible = true;
+    }
+
+    void RefreshHome()
+    {
+        var cards = new List<CharacterCard>();
+        foreach (var file in characterBox.Items.OfType<JournalFile>())
+        {
+            string line1 = "", line2 = "";
+            try
+            {
+                var j = Journal.Load(file);
+                var i = j.Character;
+                line1 = string.Join(" ", new[] { i["level"] is { } l ? $"Level {l}" : "", (string?)i["race"], (string?)i["class"] }.Where(s => !string.IsNullOrEmpty(s)));
+                var told = settings.Told.TryGetValue(file.Slug, out var t) ? t : 0;
+                var untold = j.Sessions.Count(s => Journal.Id(s) > told);
+                line2 = untold == 0 ? "The story is up to date" : untold == 1 ? "1 session not in the story yet" : $"{untold} sessions not in the story yet";
+            }
+            catch (Exception) { line2 = "The journal couldn't be read"; }
+            cards.Add(new CharacterCard(file, file.Character.Replace('-', ' '), line1, line2));
+        }
+        home.SetCharacters(cards,
+            $"No Lunar Journal saves found under {settings.WtfFolder}.\nPlay with the addon, log out or /reload, then open StoryMaker again (or check Settings).");
     }
 
     static Label Lbl(string text) => new() { Text = text, AutoSize = true, Padding = new Padding(8, 6, 0, 0) };
@@ -128,6 +194,7 @@ public class MainForm : Form
         }
         var last = files.FindIndex(f => f.Slug == settings.LastCharacter);
         characterBox.SelectedIndex = last >= 0 ? last : 0;
+        if (home.Visible) RefreshHome();
     }
 
     void LoadCharacter()
@@ -238,6 +305,7 @@ public class MainForm : Form
             var user = StoryPrompt.User(journal.Digest(sessions), previous, (settings.ExtraInstructions + "\n" + wishes.Text).Trim());
             var started = DateTime.Now;
             var text = await writer.Write(StoryPrompt.System, user, running.Token);
+            ShowEditor();
             chapter.Text = StoryPrompt.Clean(text);
             status.Text = $"Written in {(DateTime.Now - started).TotalSeconds:0} s by {profile.Model}. Read it, edit it if you like, then post or save it.";
         }
@@ -269,15 +337,32 @@ public class MainForm : Form
         var site = SiteApi();
         var ticked = Ticked();
         var page = site.PageUrl(Game, journal.File.Slug);
+        var missing = Media.MissingFiles(chapter.Text);
+        if (missing.Count > 0)
+        {
+            MessageBox.Show(this, "These pictures or sounds can't be found on this PC, so they can't be posted:\n\n" + string.Join("\n", missing),
+                Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        var files = Media.LocalFiles(chapter.Text);
         var question = $"Post this as the next chapter of {journal.File.Character}'s story?\n\n{page}\n\n" +
+            (files.Count > 0 ? $"{files.Count} picture(s)/sound(s) will be uploaded with it (big pictures made smaller first).\n" : "") +
             (ticked.Count > 0 ? $"The {ticked.Count} ticked session(s) will then count as told." : "No sessions are ticked, so none will count as told.");
         if (MessageBox.Show(this, question, Text, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
 
         running = new CancellationTokenSource();
         try
         {
+            var text = chapter.Text;
+            for (int i = 0; i < files.Count; i++)
+            {
+                Busy($"Uploading {i + 1} of {files.Count}: {Path.GetFileName(files[i])}...");
+                var (name, data) = await Task.Run(() => Media.Prepare(files[i]));
+                var address = await site.UploadMedia(Game, journal.File.Slug, name, data, running.Token);
+                text = Media.Replace(text, files[i], address);
+            }
             Busy("Posting...");
-            var number = await site.Post(Game, journal.File.Slug, chapter.Text, running.Token);
+            var number = await site.Post(Game, journal.File.Slug, text, running.Token);
             if (ticked.Count > 0)
             {
                 settings.Told[journal.File.Slug] = Math.Max(Told, ticked.Max(Journal.Id));
@@ -301,6 +386,119 @@ public class MainForm : Form
             running = null;
             Busy(null);
         }
+    }
+
+    // ---------------------------------------------------------------- editing the Markdown
+
+    void BuildFormatBar()
+    {
+        Button B(string text, string tip, Action click)
+        {
+            var b = new Button { Text = text, AutoSize = true, MinimumSize = new Size(34, 0), Padding = new Padding(4, 0, 4, 0), Margin = new Padding(0, 0, 4, 0) };
+            new ToolTip().SetToolTip(b, tip);
+            b.Click += (_, _) => { if (!preview.Visible) click(); };
+            formatBar.Controls.Add(b);
+            return b;
+        }
+        B("B", "Bold: **text**", () => Wrap("**", "**", "bold text")).Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+        B("I", "Italic: *text*", () => Wrap("*", "*", "italic text")).Font = new Font("Segoe UI", 9.5f, FontStyle.Italic);
+        B("Title", "Chapter title: ### Title", () => PrefixLines("### "));
+        B("Quote", "Quote: > text", () => PrefixLines("> "));
+        B("Divider", "A divider between scenes: ---", () => InsertBlock("---"));
+        B("Link...", "A link: [text](https://...)", InsertLink);
+        B("Picture...", "A picture from your WoW screenshots, with a caption", InsertPicture);
+        B("Sound...", "A sound (mp3, ogg, wav, m4a), shown as a player", InsertSound);
+        formatBar.Controls.Add(new Label { Width = 16 });
+        previewButton.Click += (_, _) => TogglePreview();
+        formatBar.Controls.Add(previewButton);
+    }
+
+    void Wrap(string before, string after, string placeholder)
+    {
+        var sel = chapter.SelectedText.Length > 0 ? chapter.SelectedText : placeholder;
+        var start = chapter.SelectionStart;
+        chapter.SelectedText = before + sel + after;
+        chapter.Select(start + before.Length, sel.Length);
+        chapter.Focus();
+    }
+
+    // Puts a mark at the start of every selected line (or the line with the cursor)
+    void PrefixLines(string mark)
+    {
+        var text = chapter.Text;
+        var start = text.LastIndexOf('\n', Math.Max(0, chapter.SelectionStart - 1)) + 1;
+        if (chapter.SelectionStart == 0) start = 0;
+        var endPos = chapter.SelectionStart + chapter.SelectionLength;
+        var end = text.IndexOf('\r', endPos);
+        if (end < 0) end = text.Length;
+        var lines = text[start..end].Split("\r\n").Select(l => l.StartsWith(mark) || l.Length == 0 ? l : mark + l.TrimStart('#', ' '));
+        chapter.Select(start, end - start);
+        chapter.SelectedText = string.Join("\r\n", lines);
+        chapter.Focus();
+    }
+
+    // Puts a block (a picture, a sound, a divider) on its own lines at the cursor
+    void InsertBlock(string block)
+    {
+        var before = chapter.Text[..chapter.SelectionStart];
+        var lead = before.Length == 0 || before.EndsWith("\r\n\r\n") ? "" : before.EndsWith("\r\n") ? "\r\n" : "\r\n\r\n";
+        chapter.SelectedText = lead + block + "\r\n\r\n";
+        chapter.Focus();
+    }
+
+    void InsertLink()
+    {
+        var answer = Prompt.Ask2(this, "Insert a link", "Text", chapter.SelectedText, "Address", "https://");
+        if (answer is not { } a || a.Item2.Trim().Length == 0) return;
+        chapter.SelectedText = $"[{(a.Item1.Trim().Length > 0 ? a.Item1.Trim() : a.Item2.Trim())}]({a.Item2.Trim()})";
+        chapter.Focus();
+    }
+
+    /// <summary>The game's Screenshots folder: set in Settings, or next to the WTF folder (_forever_\Screenshots).</summary>
+    string ScreenshotFolder()
+    {
+        if (!string.IsNullOrWhiteSpace(settings.ScreenshotFolder)) return settings.ScreenshotFolder;
+        var wtf = new DirectoryInfo(settings.WtfFolder);           // ...\_forever_\WTF\Account
+        return Path.Combine(wtf.Parent?.Parent?.FullName ?? "", "Screenshots");
+    }
+
+    void InsertPicture()
+    {
+        using var picker = new ScreenshotPicker(ScreenshotFolder());
+        if (picker.ShowDialog(this) != DialogResult.OK || picker.ChosenPath is null) return;
+        InsertBlock(Media.Markdown(picker.ChosenPath, picker.Caption));
+    }
+
+    void InsertSound()
+    {
+        using var d = new OpenFileDialog { Title = "Choose a sound", Filter = "Sounds|*.mp3;*.ogg;*.oga;*.wav;*.m4a|All files|*.*" };
+        if (d.ShowDialog(this) != DialogResult.OK) return;
+        var caption = Prompt.Ask(this, "Insert a sound", "Caption", Path.GetFileNameWithoutExtension(d.FileName));
+        if (caption is null) return;
+        InsertBlock(Media.Markdown(d.FileName, caption));
+    }
+
+    void TogglePreview()
+    {
+        if (preview.Visible) { ShowEditor(); return; }
+        var folder = journal is null ? null : SaveFolder(journal.File);
+        var html = Media.PreviewHtml(chapter.Text, Theme.IsDark, folder);
+        var file = Path.Combine(Path.GetTempPath(), "StoryMaker", "preview.html");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, html, new System.Text.UTF8Encoding(true));
+        preview.Navigate(new Uri(file));
+        preview.Visible = true;
+        chapter.Visible = false;
+        previewButton.Text = "Edit";
+        foreach (Control c in formatBar.Controls) if (c != previewButton) c.Enabled = false;
+    }
+
+    void ShowEditor()
+    {
+        preview.Visible = false;
+        chapter.Visible = true;
+        previewButton.Text = "Preview";
+        foreach (Control c in formatBar.Controls) c.Enabled = true;
     }
 
     // ---------------------------------------------------------------- saving on this PC
@@ -350,7 +548,7 @@ public class MainForm : Form
         };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        WriteMarkdown(dialog.FileName, chapter.Text);
+        WriteMarkdown(dialog.FileName, Media.CopyNextTo(chapter.Text, Path.GetDirectoryName(dialog.FileName)!));
         settings.SaveFolders[journal.File.Slug] = Path.GetDirectoryName(dialog.FileName)!;
 
         var ticked = Ticked();

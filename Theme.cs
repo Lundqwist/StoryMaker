@@ -4,8 +4,9 @@ using Microsoft.Win32;
 namespace StoryMaker;
 
 /// <summary>
-/// Light and dark look. .NET 8's WinForms has no dark mode of its own, so the colours are set on each
-/// control, and Windows is asked for a dark title bar and dark scroll bars.
+/// The look. Dark is lundqwist.se's own: deep navy, navy bands, gold frames and headings. .NET 8's
+/// WinForms has no dark mode of its own, so the colours are set on each control, and Windows is asked
+/// for a dark title bar and dark scroll bars.
 /// </summary>
 public static class Theme
 {
@@ -13,16 +14,36 @@ public static class Theme
 
     public static bool IsDark { get; private set; }
 
-    // Dark colours, close to Windows' own dark mode
-    static readonly Color DarkBack = Color.FromArgb(32, 32, 32);
-    static readonly Color DarkInput = Color.FromArgb(43, 43, 43);
-    static readonly Color DarkButton = Color.FromArgb(55, 55, 55);
-    static readonly Color DarkBorder = Color.FromArgb(85, 85, 85);
-    static readonly Color DarkText = Color.FromArgb(230, 230, 230);
-    static readonly Color DarkMuted = Color.FromArgb(160, 160, 160);
+    // lundqwist.se's colours (Website2.0 styles.css)
+    public static readonly Color NavyDeep = Color.FromArgb(0x08, 0x14, 0x28);   // page background
+    public static readonly Color Navy = Color.FromArgb(0x0e, 0x21, 0x47);       // header and footer bands
+    public static readonly Color NavyLight = Color.FromArgb(0x17, 0x36, 0x6b);  // frames and borders
+    public static readonly Color Gold = Color.FromArgb(0xc9, 0xa3, 0x6b);       // headings, labels, lines
+    public static readonly Color GoldSoft = Color.FromArgb(0xe0, 0xc7, 0x9d);   // hover, highlights
+    static readonly Color SiteText = Color.FromArgb(0xd5, 0xdc, 0xeb);
+    static readonly Color SiteMuted = Color.FromArgb(0x94, 0xa2, 0xbd);
 
-    public static Color Muted => IsDark ? DarkMuted : SystemColors.GrayText;
-    public static Color Good => IsDark ? Color.FromArgb(110, 200, 120) : Color.ForestGreen;
+    static readonly Color DarkBack = NavyDeep;
+    static readonly Color DarkInput = Color.FromArgb(0x0b, 0x1b, 0x38);
+    static readonly Color DarkButton = Navy;
+    static readonly Color DarkBorder = NavyLight;
+    static readonly Color DarkText = SiteText;
+    static readonly Color DarkMuted = SiteMuted;
+
+    // Light: parchment and ink, with the same gold
+    static readonly Color LightBack = Color.FromArgb(0xf6, 0xf1, 0xe7);
+    static readonly Color LightBand = Color.FromArgb(0xe9, 0xe0, 0xcd);
+    static readonly Color LightInk = Color.FromArgb(0x1c, 0x24, 0x38);
+    static readonly Color LightGold = Color.FromArgb(0x8a, 0x64, 0x28);
+
+    public static Color Back => IsDark ? DarkBack : LightBack;
+    public static Color Band => IsDark ? Navy : LightBand;
+    public static Color Frame => IsDark ? NavyLight : Color.FromArgb(0xc8, 0xb8, 0x96);
+    public static Color Text => IsDark ? DarkText : LightInk;
+    public static Color Accent => IsDark ? Gold : LightGold;
+    public static Color AccentSoft => IsDark ? GoldSoft : Color.FromArgb(0x6e, 0x4c, 0x18);
+    public static Color Muted => IsDark ? DarkMuted : Color.FromArgb(0x6b, 0x6f, 0x7d);
+    public static Color Good => IsDark ? Color.FromArgb(120, 200, 140) : Color.ForestGreen;
     public static Color Bad => IsDark ? Color.FromArgb(240, 110, 100) : Color.Firebrick;
 
     /// <summary>Works out light or dark from the setting ("System" follows Windows' app mode).</summary>
@@ -51,33 +72,46 @@ public static class Theme
         Paint(form);
     }
 
+    /// <summary>Colours one control and what is in it.</summary>
+    public static void PaintControl(Control c) => Paint(c);
+
     static void Paint(Control c)
     {
         switch (c)
         {
-            case TextBox or ListBox or ComboBox:
-                c.BackColor = IsDark ? DarkInput : SystemColors.Window;
-                c.ForeColor = IsDark ? DarkText : SystemColors.WindowText;
+            case TextBox or ListBox or ComboBox or ListView:
+                c.BackColor = IsDark ? DarkInput : Color.FromArgb(0xfd, 0xfb, 0xf6);
+                c.ForeColor = IsDark ? DarkText : LightInk;
                 if (c is TextBox t) t.BorderStyle = IsDark ? BorderStyle.FixedSingle : BorderStyle.Fixed3D;
                 if (c is ListBox l) l.BorderStyle = IsDark ? BorderStyle.FixedSingle : BorderStyle.Fixed3D;
                 if (c is ComboBox cb) StyleComboBox(cb);
                 DarkScrollBars(c);
                 break;
             case Button b:
-                b.FlatStyle = IsDark ? FlatStyle.Flat : FlatStyle.Standard;
-                b.BackColor = IsDark ? DarkButton : SystemColors.Control;
-                b.ForeColor = IsDark ? DarkText : SystemColors.ControlText;
-                b.FlatAppearance.BorderColor = DarkBorder;
-                b.UseVisualStyleBackColor = !IsDark;
+                // like the site's buttons: a gold outline; the main ones (Tag "primary") filled with gold
+                bool primary = Equals(b.Tag, "primary");
+                b.FlatStyle = FlatStyle.Flat;
+                b.UseVisualStyleBackColor = false;
+                b.FlatAppearance.BorderSize = 1;
+                b.FlatAppearance.BorderColor = Accent;
+                b.BackColor = primary ? Accent : Band;
+                b.ForeColor = primary ? (IsDark ? NavyDeep : Color.White) : (IsDark ? GoldSoft : LightInk);
+                b.FlatAppearance.MouseOverBackColor = primary ? AccentSoft : (IsDark ? NavyLight : Color.FromArgb(0xde, 0xd2, 0xb8));
+                b.FlatAppearance.MouseDownBackColor = primary ? AccentSoft : Frame;
+                b.Cursor = Cursors.Hand;
                 break;
             case Label or CheckBox:
                 c.BackColor = Color.Transparent;
                 if (Equals(c.Tag, "muted")) c.ForeColor = Muted;
-                else if (!Equals(c.Tag, "keep")) c.ForeColor = IsDark ? DarkText : SystemColors.ControlText;
+                else if (Equals(c.Tag, "gold")) c.ForeColor = Accent;
+                else if (!Equals(c.Tag, "keep")) c.ForeColor = Text;
                 break;
+            case IThemed themed:
+                themed.ApplyTheme();
+                return;   // draws its own children
             default:
-                c.BackColor = IsDark ? DarkBack : SystemColors.Control;
-                c.ForeColor = IsDark ? DarkText : SystemColors.ControlText;
+                c.BackColor = Equals(c.Tag, "band") ? Band : Back;
+                c.ForeColor = Text;
                 break;
         }
         foreach (Control child in c.Controls) Paint(child);
@@ -97,7 +131,7 @@ public static class Theme
         }
         // Not FlatStyle.Flat: WinForms' flat drawing paints the box white whatever its colour
         cb.FlatStyle = FlatStyle.Standard;
-        cb.DrawMode = IsDark ? DrawMode.OwnerDrawFixed : DrawMode.Normal;
+        cb.DrawMode = DrawMode.OwnerDrawFixed;
         if (cb.IsHandleCreated) ComboTheme(cb);
         cb.Invalidate();
     }
@@ -113,8 +147,8 @@ public static class Theme
         if (sender is not ComboBox cb) return;
         bool inList = (e.State & DrawItemState.ComboBoxEdit) == 0;
         bool selected = inList && (e.State & DrawItemState.Selected) != 0;
-        var back = selected ? (IsDark ? Color.FromArgb(62, 92, 140) : SystemColors.Highlight) : cb.BackColor;
-        var fore = selected ? Color.White : cb.ForeColor;
+        var back = selected ? (IsDark ? NavyLight : Color.FromArgb(0xe4, 0xd3, 0xae)) : cb.BackColor;
+        var fore = selected ? (IsDark ? GoldSoft : LightInk) : cb.ForeColor;
         if (!cb.Enabled) fore = Muted;
         using (var b = new SolidBrush(back)) e.Graphics.FillRectangle(b, e.Bounds);
         if (e.Index >= 0)
@@ -164,4 +198,10 @@ public static class Theme
         }
         catch (Exception) { return null; }
     }
+}
+
+/// <summary>A control that colours itself (and its children) when the look changes.</summary>
+public interface IThemed
+{
+    void ApplyTheme();
 }

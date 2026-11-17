@@ -49,7 +49,7 @@ public class SettingsForm : Form
         }
 
         Header("Look");
-        look.Items.AddRange(["Same as Windows", "Light", "Dark"]);
+        look.Items.AddRange(["Same as Windows", "Light", "Dark (lundqwist.se)"]);
         Row("Colours", look);
 
         Header("WoW: Forever");

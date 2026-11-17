@@ -45,6 +45,8 @@ public class AiProfile
 public class Settings
 {
     public string WtfFolder { get; set; } = @"D:\Blizzard\World of Warcraft\_forever_\WTF\Account";
+    /// <summary>Where pictures are picked from; empty = the game's Screenshots folder next to WTF.</summary>
+    public string ScreenshotFolder { get; set; } = "";
     public string SiteUrl { get; set; } = "https://lundqwist.se/wowcharacters";
     public string SiteTokenVariable { get; set; } = "STORY_TOKEN";
     public AiKind Ai { get; set; } = AiKind.Ollama;

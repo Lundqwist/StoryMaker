@@ -46,6 +46,19 @@ public class SiteClient(string siteUrl, string? token)
         return (int?)json?["chapter"] ?? 0;
     }
 
+    /// <summary>Uploads a picture or sound for the character's story; returns its address on the site.</summary>
+    public async Task<string> UploadMedia(string game, string key, string fileName, byte[] data, CancellationToken cancel = default)
+    {
+        var request = Request(HttpMethod.Post, $"{siteUrl.TrimEnd('/')}/api/{game}/media?c={Uri.EscapeDataString(key)}");
+        var form = new MultipartFormDataContent { { new ByteArrayContent(data), "file", fileName } };
+        request.Content = form;
+        using var response = await Send(request, key, cancel);
+        var json = await response.Content.ReadFromJsonAsync<JsonObject>(cancel);
+        var url = (string?)json?["url"] ?? throw new AiException("The website didn't say where it put the file.");
+        // the site answers with an address on its own host ("/wowcharacters/media/..."); keep it like that
+        return url;
+    }
+
     static async Task<HttpResponseMessage> Send(HttpRequestMessage request, string key, CancellationToken cancel)
     {
         HttpResponseMessage response;
