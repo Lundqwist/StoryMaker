@@ -113,7 +113,7 @@ public class MainForm : Form
         postButton.Click += async (_, _) => await PostChapter();
         saveButton.Click += (_, _) => SaveChapter();
         openButton.Click += (_, _) => OpenPage();
-        chapter.TextChanged += (_, _) => postButton.Enabled = saveButton.Enabled = running is null && chapter.Text.Trim().Length > 0 && journal is not null;
+        chapter.TextChanged += (_, _) => EnableButtons();
         FormClosing += (_, _) => { running?.Cancel(); settings.Save(); };
 
         Theme.Choose(settings.Theme);
@@ -169,10 +169,12 @@ public class MainForm : Form
                 line2 = untold == 0 ? "The story is up to date" : untold == 1 ? "1 session not in the story yet" : $"{untold} sessions not in the story yet";
             }
             catch (Exception) { line2 = "The journal couldn't be read"; }
+            if (file.IsSample) line2 = "Sample: try it without the game";
             cards.Add(new CharacterCard(file, file.Character.Replace('-', ' '), line1, line2));
         }
-        home.SetCharacters(cards,
-            $"No Lunar Journal saves found under {settings.WtfFolder}.\nPlay with the addon, log out or /reload, then open StoryMaker again (or check Settings).");
+        home.SetCharacters(cards, cards.Any(c => c.File.IsSample)
+            ? $"No Lunar Journal saves found under {settings.WtfFolder}.\nPlay with the addon, log out or /reload, then open StoryMaker again (or check Settings).\nMeanwhile, try the sample character below."
+            : null);
     }
 
     static Label Lbl(string text) => new() { Text = text, AutoSize = true, Padding = new Padding(8, 6, 0, 0) };
@@ -195,15 +197,10 @@ public class MainForm : Form
     void FindJournals()
     {
         var files = Journal.Find(settings.WtfFolder);
+        // No journals yet (no game, or no addon): offer the sample character, so the program can be tried
+        if (files.Count == 0) files.Add(Journal.Sample());
         characterBox.Items.Clear();
         foreach (var f in files) characterBox.Items.Add(f);
-        if (files.Count == 0)
-        {
-            journal = null;
-            sessionList.Items.Clear();
-            journalInfo.Text = $"No Lunar Journal saves found under {settings.WtfFolder}. Play with the addon, log out or /reload, then press \"Read journals again\".";
-            return;
-        }
         var last = files.FindIndex(f => f.Slug == settings.LastCharacter);
         characterBox.SelectedIndex = last >= 0 ? last : 0;
         if (home.Visible) RefreshHome();
@@ -226,8 +223,15 @@ public class MainForm : Form
         lastPosted = null;
         openButton.Text = "Open the story page";
         settings.LastCharacter = file.Slug;
+        if (file.IsSample)
+        {
+            // the sample can be written without any AI: offer that, so it works at once
+            aiBox.SelectedIndex = (int)AiKind.Sample;
+            status.Text = "Sample character: tick sessions and press Write chapter. Pick a real AI under AI to have one write it instead.";
+        }
         settings.Save();
         FillSessions();
+        EnableButtons();
     }
 
     long Told => journal is not null && settings.Told.TryGetValue(journal.File.Slug, out var t) ? t : 0;
@@ -263,10 +267,19 @@ public class MainForm : Form
     {
         bool busy = message is not null;
         writeButton.Text = busy ? "Stop" : "Write chapter";
-        postButton.Enabled = saveButton.Enabled = !busy && chapter.Text.Trim().Length > 0 && journal is not null;
+        EnableButtons(busy);
         characterBox.Enabled = aiBox.Enabled = modelBox.Enabled = settingsButton.Enabled = reloadButton.Enabled = !busy;
         UseWaitCursor = busy;
         if (busy) status.Text = message;
+    }
+
+    // Save works for every character; posting and the story page only for real ones (the sample has no page)
+    void EnableButtons(bool busy = false)
+    {
+        busy |= running is not null;
+        saveButton.Enabled = !busy && chapter.Text.Trim().Length > 0 && journal is not null;
+        postButton.Enabled = saveButton.Enabled && journal?.File.IsSample == false;
+        openButton.Enabled = journal?.File.IsSample == false;
     }
 
     SiteClient SiteApi() => new(settings.SiteUrl, Settings.Secret(settings.SiteTokenVariable));
@@ -283,6 +296,12 @@ public class MainForm : Form
         var profile = settings.Profile(settings.Ai);
         profile.Model = modelBox.Text.Trim();
         settings.Save();
+        if (profile.Kind == AiKind.Sample && !journal.File.IsSample)
+        {
+            MessageBox.Show(this, $"The sample chapter only goes with the sample character. Pick an AI under AI to write {journal.File.Character}'s chapter.",
+                Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
 
         // A local model shares the graphics card with the game; with both running it can take very long
         if (profile.Kind == AiKind.Ollama && GameIsRunning() &&
@@ -303,9 +322,9 @@ public class MainForm : Form
             Busy("Reading the story so far...");
             string previous;
             var saved = SavedChapters(journal.File);
-            if (Settings.Secret(settings.SiteTokenVariable) is null && saved.Count > 0)
+            if (journal.File.IsSample || Settings.Secret(settings.SiteTokenVariable) is null)
             {
-                // No website set up: the chapters saved on this PC are the story so far
+                // No website set up (or the sample): the chapters saved on this PC are the story so far
                 previous = string.Join("\n\n", saved.Select(File.ReadAllText));
             }
             else

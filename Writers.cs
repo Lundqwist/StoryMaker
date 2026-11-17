@@ -19,6 +19,7 @@ public static class Writers
 {
     public static IStoryWriter For(AiProfile p)
     {
+        if (p.Kind == AiKind.Sample) return new SampleWriter();
         var key = Settings.Secret(p.KeyVariable);
         if (key is null && p.Kind is not (AiKind.OpenAICompatible or AiKind.Ollama))
             throw new AiException($"No API key: set the user environment variable {p.KeyVariable} (Settings shows which one is used), then try again.");
@@ -231,6 +232,27 @@ public class OllamaWriter(string model, string baseUrl) : IStoryWriter
         {
             return [];
         }
+    }
+}
+
+/// <summary>
+/// No AI: hands back the chapter written in advance for the sample character (Sample\chapter.md), a few
+/// words at a time like a streaming AI, so the whole program can be tried without an AI or the game.
+/// </summary>
+public class SampleWriter : IStoryWriter
+{
+    public async Task<string> Write(string system, string user, CancellationToken cancel, IProgress<string>? partial = null)
+    {
+        using var stream = typeof(SampleWriter).Assembly.GetManifestResourceStream("sample-chapter.md")!;
+        var text = await new StreamReader(stream).ReadToEndAsync(cancel);
+        var shown = new System.Text.StringBuilder();
+        int words = 0;
+        foreach (var word in System.Text.RegularExpressions.Regex.Split(text, @"(?<=\s)"))
+        {
+            shown.Append(word);
+            if (++words % 5 == 0) { partial?.Report(shown.ToString()); await Task.Delay(30, cancel); }
+        }
+        return text;
     }
 }
 

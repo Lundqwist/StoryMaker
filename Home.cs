@@ -106,7 +106,8 @@ public class HomeView : Panel, IThemed
         Resize += (_, _) => Arrange();
     }
 
-    public void SetCharacters(IEnumerable<CharacterCard> list, string emptyText)
+    /// <summary>The cards, and a note above them (null for none).</summary>
+    public void SetCharacters(IEnumerable<CharacterCard> list, string? note)
     {
         foreach (Control c in cards.Controls) c.Dispose();
         cards.Controls.Clear();
@@ -115,8 +116,8 @@ public class HomeView : Panel, IThemed
             card.Click += (_, _) => CharacterChosen?.Invoke(card.File);
             cards.Controls.Add(card);
         }
-        empty.Text = emptyText;
-        empty.Visible = cards.Controls.Count == 0;
+        empty.Text = note ?? "";
+        empty.Visible = note is not null;
         ApplyTheme();
         Arrange();
     }
@@ -144,6 +145,7 @@ public class HomeView : Panel, IThemed
         subtitle.Location = new Point((w - subtitle.PreferredWidth) / 2, y);
         y += subtitle.PreferredHeight + 22;
         empty.Location = new Point(Math.Max(10, (w - empty.PreferredWidth) / 2), y);
+        if (empty.Visible) y += empty.PreferredHeight + 14;
         // cards centred, as many to a row as fit
         int cardW = 320, perRow = Math.Max(1, Math.Min(cards.Controls.Count, (w - 40) / cardW));
         cards.MaximumSize = new Size(perRow * cardW, 0);

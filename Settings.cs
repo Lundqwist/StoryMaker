@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace StoryMaker;
 
 // The numbers are stored in the settings file: add new ones at the end
-public enum AiKind { Claude, OpenAI, Gemini, OpenAICompatible, Ollama }
+public enum AiKind { Claude, OpenAI, Gemini, OpenAICompatible, Ollama, Sample }
 
 /// <summary>One AI the program can use. Keys are never stored: only the name of the environment variable that holds it.</summary>
 public class AiProfile
@@ -20,6 +20,7 @@ public class AiProfile
         AiKind.OpenAI => "OpenAI",
         AiKind.Gemini => "Gemini (Google)",
         AiKind.Ollama => "Ollama (free, runs on this PC)",
+        AiKind.Sample => "No AI: the sample chapter (sample character only)",
         _ => "OpenAI-compatible (LM Studio, OpenRouter...)",
     };
 
@@ -29,6 +30,7 @@ public class AiProfile
         AiKind.OpenAI => ["gpt-5"],
         AiKind.Gemini => ["gemini-2.5-pro", "gemini-2.5-flash"],
         AiKind.Ollama => ["gemma3:12b"],
+        AiKind.Sample => ["sample"],
         _ => ["llama3.1"],
     };
 
@@ -38,6 +40,7 @@ public class AiProfile
         AiKind.OpenAI => new() { Kind = kind, Model = "gpt-5", KeyVariable = "OPENAI_API_KEY", BaseUrl = "https://api.openai.com/v1" },
         AiKind.Gemini => new() { Kind = kind, Model = "gemini-2.5-pro", KeyVariable = "GEMINI_API_KEY" },
         AiKind.Ollama => new() { Kind = kind, Model = "gemma3:12b", KeyVariable = "", BaseUrl = "http://localhost:11434" },
+        AiKind.Sample => new() { Kind = kind, Model = "sample" },
         _ => new() { Kind = kind, Model = "llama3.1", KeyVariable = "", BaseUrl = "http://localhost:1234/v1" },
     };
 }

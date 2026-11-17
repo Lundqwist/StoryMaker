@@ -23,6 +23,9 @@
     <!-- from lundqwist.se (Website2.0 client/public/images), converted from WebP -->
     <EmbeddedResource Include="Assets\lundqwist-emblem.png" LogicalName="lundqwist-emblem.png" />
     <EmbeddedResource Include="Assets\lundqwist-logo.png" LogicalName="lundqwist-logo.png" />
+    <!-- the sample character, for trying the program without the game (Sample\, made up for it) -->
+    <EmbeddedResource Include="Sample\LunarJournal.lua" LogicalName="sample-journal.lua" />
+    <EmbeddedResource Include="Sample\chapter.md" LogicalName="sample-chapter.md" />
     <PackageReference Include="Anthropic" Version="13.9.0" />
     <PackageReference Include="Markdig" Version="1.6.0" />
   </ItemGroup>

@@ -132,8 +132,8 @@ public static partial class LuaReader
     }
 }
 
-/// <summary>One character's journal file, found under the game's WTF folder.</summary>
-public record JournalFile(string Character, string Path)
+/// <summary>One character's journal file, found under the game's WTF folder (or the built-in sample).</summary>
+public record JournalFile(string Character, string Path, bool IsSample = false)
 {
     /// <summary>The character's key on the website: the folder name in lower case ("lunamal-sunshadow").</summary>
     public string Slug => Character.ToLowerInvariant();
@@ -161,6 +161,26 @@ public class Journal
                     if (System.IO.File.Exists(file)) found.Add(new(System.IO.Path.GetFileName(character), file));
                 }
         return found.OrderBy(f => f.Character).ToList();
+    }
+
+    /// <summary>
+    /// The sample character built into the program (Sample\LunarJournal.lua, made up for it), so StoryMaker
+    /// can be tried without the game. Written out to the settings folder, where it is read like any journal.
+    /// </summary>
+    public static JournalFile Sample()
+    {
+        var path = System.IO.Path.Combine(Settings.Folder, "sample", "Brakka-Emberhide", "LunarJournal.lua");
+        using (var stream = typeof(Journal).Assembly.GetManifestResourceStream("sample-journal.lua")!)
+        using (var bytes = new MemoryStream())
+        {
+            stream.CopyTo(bytes);
+            if (!System.IO.File.Exists(path) || !System.IO.File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes.ToArray()))
+            {
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+                System.IO.File.WriteAllBytes(path, bytes.ToArray());
+            }
+        }
+        return new("Brakka-Emberhide", path, IsSample: true);
     }
 
     public static Journal Load(JournalFile file)

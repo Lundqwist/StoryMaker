@@ -75,6 +75,7 @@ public class SettingsForm : Form
         t.Controls.Add(new Label { Text = "", AutoSize = true });
         foreach (var kind in Enum.GetValues<AiKind>())
         {
+            if (kind == AiKind.Sample) continue;   // nothing to set
             var p = settings.Profile(kind);
             var key = new TextBox { Width = 200, Text = p.KeyVariable };
             var url = new TextBox { Width = 320, Text = p.BaseUrl, Enabled = kind is AiKind.OpenAI or AiKind.OpenAICompatible or AiKind.Ollama };

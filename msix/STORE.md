@@ -30,6 +30,16 @@
 - **Restricted capability `runFullTrust`**, reason: *A desktop (WinForms) program that reads the World
   of Warcraft folder chosen by the user and saves chapters where the user chooses.*
 
+**Notes for certification** (Submission options → Notes for certification):
+
+> StoryMaker reads save files written by a World of Warcraft addon. Testers don't need the game or an AI
+> account: when no saves are found, the front page shows a sample character, Brakka Emberhide. Click her
+> card, keep both play sessions ticked, and press "Write chapter". The AI is set to "No AI: the sample
+> chapter", which writes a prepared chapter into the box. It can then be edited (formatting bar, Preview)
+> and saved with "Save as Markdown...". Posting to a website needs the author's own site and is turned
+> off for the sample. Real AIs (Ollama on the PC, or Claude/OpenAI/Gemini with the user's own API key)
+> are optional and set up in Settings.
+
 **Short description**: Turns your World of Warcraft: Forever adventures into your characters' own memories.
 
 **Description**:
@@ -45,6 +55,7 @@ character, many years later, remembering.
 • Add screenshots from the game and sounds
 • Post it to your website as the next chapter, or save it as a Markdown file
 • Navy and gold, or a light look
+• Not playing yet? Try it with the built-in sample character, no AI needed
 
 Open source (MIT): https://github.com/Lundqwist/StoryMaker. World of Warcraft is a trademark of
 Blizzard Entertainment; this is a fan project.
