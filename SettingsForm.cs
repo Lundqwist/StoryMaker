@@ -64,23 +64,23 @@ public class SettingsForm : Form
         Header("AI (keys are read from user environment variables; set them with: setx NAME value)");
         t.Controls.Add(new Label { Text = "", AutoSize = true });
         t.Controls.Add(new Label { Text = "Key variable", AutoSize = true });
-        t.Controls.Add(new Label { Text = "Address (only for OpenAI-compatible)", AutoSize = true });
+        t.Controls.Add(new Label { Text = "Address (OpenAI, OpenAI-compatible, Ollama)", AutoSize = true });
         t.Controls.Add(new Label { Text = "", AutoSize = true });
         foreach (var kind in Enum.GetValues<AiKind>())
         {
             var p = settings.Profile(kind);
             var key = new TextBox { Width = 200, Text = p.KeyVariable };
-            var url = new TextBox { Width = 320, Text = p.BaseUrl, Enabled = kind is AiKind.OpenAI or AiKind.OpenAICompatible };
+            var url = new TextBox { Width = 320, Text = p.BaseUrl, Enabled = kind is AiKind.OpenAI or AiKind.OpenAICompatible or AiKind.Ollama };
             var found = new Label { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
-            key.TextChanged += (_, _) => Found(found, key.Text, optional: kind == AiKind.OpenAICompatible);
-            Found(found, key.Text, optional: kind == AiKind.OpenAICompatible);
+            key.TextChanged += (_, _) => Found(found, key.Text, optional: kind is AiKind.OpenAICompatible or AiKind.Ollama);
+            Found(found, key.Text, optional: kind is AiKind.OpenAICompatible or AiKind.Ollama);
             ai[kind] = (key, url, found);
             t.Controls.Add(new Label { Text = AiProfile.Title(kind), AutoSize = true, Padding = new Padding(0, 6, 8, 0) });
             t.Controls.Add(key);
             t.Controls.Add(url);
             t.Controls.Add(found);
         }
-        Note("A local AI (Ollama: http://localhost:11434/v1, LM Studio: http://localhost:1234/v1) needs no key; leave the variable empty.");
+        Note("Ollama and other local AIs (LM Studio: http://localhost:1234/v1) need no key; leave the variable empty.");
 
         Header("Wishes for every chapter (optional)");
         t.Controls.Add(extra);

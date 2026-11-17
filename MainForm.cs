@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 
 namespace StoryMaker;
@@ -94,12 +94,19 @@ public class MainForm : Form
 
     static Label Lbl(string text) => new() { Text = text, AutoSize = true, Padding = new Padding(8, 6, 0, 0) };
 
-    void FillModels()
+    async void FillModels()
     {
-        var p = settings.Profile(settings.Ai);
+        var kind = settings.Ai;
+        var p = settings.Profile(kind);
         modelBox.Items.Clear();
-        modelBox.Items.AddRange(AiProfile.SuggestedModels(settings.Ai));
+        modelBox.Items.AddRange(AiProfile.SuggestedModels(kind));
         modelBox.Text = p.Model;
+        if (kind != AiKind.Ollama) return;
+        // Offer the models Ollama really has
+        var installed = await OllamaWriter.Installed(string.IsNullOrWhiteSpace(p.BaseUrl) ? OllamaWriter.DefaultUrl : p.BaseUrl);
+        if (settings.Ai != kind) return;
+        foreach (var m in installed) if (!modelBox.Items.Contains(m)) modelBox.Items.Add(m);
+        if (installed.Count == 0) status.Text = "Ollama isn't running or has no models yet (ollama pull gemma3:12b).";
     }
 
     void FindJournals()

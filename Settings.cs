@@ -2,7 +2,8 @@ using System.Text.Json;
 
 namespace StoryMaker;
 
-public enum AiKind { Claude, OpenAI, Gemini, OpenAICompatible }
+// The numbers are stored in the settings file: add new ones at the end
+public enum AiKind { Claude, OpenAI, Gemini, OpenAICompatible, Ollama }
 
 /// <summary>One AI the program can use. Keys are never stored: only the name of the environment variable that holds it.</summary>
 public class AiProfile
@@ -10,7 +11,7 @@ public class AiProfile
     public AiKind Kind { get; set; }
     public string Model { get; set; } = "";
     public string KeyVariable { get; set; } = "";
-    /// <summary>Only for OpenAI-compatible servers (Ollama, LM Studio, OpenRouter...).</summary>
+    /// <summary>For OpenAI, OpenAI-compatible servers and Ollama.</summary>
     public string BaseUrl { get; set; } = "";
 
     public static string Title(AiKind kind) => kind switch
@@ -18,7 +19,8 @@ public class AiProfile
         AiKind.Claude => "Claude (Anthropic)",
         AiKind.OpenAI => "OpenAI",
         AiKind.Gemini => "Gemini (Google)",
-        _ => "OpenAI-compatible (Ollama, LM Studio, OpenRouter...)",
+        AiKind.Ollama => "Ollama (free, runs on this PC)",
+        _ => "OpenAI-compatible (LM Studio, OpenRouter...)",
     };
 
     public static string[] SuggestedModels(AiKind kind) => kind switch
@@ -26,6 +28,7 @@ public class AiProfile
         AiKind.Claude => ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-2", "claude-haiku-5-5"],
         AiKind.OpenAI => ["gpt-5"],
         AiKind.Gemini => ["gemini-2.5-pro", "gemini-2.5-flash"],
+        AiKind.Ollama => ["gemma3:12b"],
         _ => ["llama3.1"],
     };
 
@@ -34,7 +37,8 @@ public class AiProfile
         AiKind.Claude => new() { Kind = kind, Model = "claude-opus-5-5", KeyVariable = "ANTHROPIC_API_KEY" },
         AiKind.OpenAI => new() { Kind = kind, Model = "gpt-5", KeyVariable = "OPENAI_API_KEY", BaseUrl = "https://api.openai.com/v1" },
         AiKind.Gemini => new() { Kind = kind, Model = "gemini-2.5-pro", KeyVariable = "GEMINI_API_KEY" },
-        _ => new() { Kind = kind, Model = "llama3.1", KeyVariable = "", BaseUrl = "http://localhost:11434/v1" },
+        AiKind.Ollama => new() { Kind = kind, Model = "gemma3:12b", KeyVariable = "", BaseUrl = "http://localhost:11434" },
+        _ => new() { Kind = kind, Model = "llama3.1", KeyVariable = "", BaseUrl = "http://localhost:1234/v1" },
     };
 }
 
@@ -43,7 +47,7 @@ public class Settings
     public string WtfFolder { get; set; } = @"D:\Blizzard\World of Warcraft\_forever_\WTF\Account";
     public string SiteUrl { get; set; } = "https://lundqwist.se/wowcharacters";
     public string SiteTokenVariable { get; set; } = "STORY_TOKEN";
-    public AiKind Ai { get; set; } = AiKind.Claude;
+    public AiKind Ai { get; set; } = AiKind.Ollama;
     public Dictionary<AiKind, AiProfile> Profiles { get; set; } = [];
     /// <summary>Character slug -> id of the last session that is in a story.</summary>
     public Dictionary<string, long> Told { get; set; } = [];
