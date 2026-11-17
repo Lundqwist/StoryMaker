@@ -22,6 +22,11 @@ public static class Writers
         if (key is null && p.Kind != AiKind.OpenAICompatible)
             throw new AiException($"No API key: set the user environment variable {p.KeyVariable} (Settings shows which one is used), then try again.");
         if (string.IsNullOrWhiteSpace(p.Model)) throw new AiException("Pick a model first.");
+        // Never send a secret that is clearly not this AI's key (for example the website's token) to the AI
+        if (key is not null && key == Settings.Secret("STORY_TOKEN"))
+            throw new AiException($"{p.KeyVariable} holds the website's STORY_TOKEN, not an AI key. Set {p.KeyVariable} to the API key from the AI's own website, then start StoryMaker again.");
+        if (p.Kind == AiKind.Claude && key is not null && !key.StartsWith("sk-ant-", StringComparison.Ordinal))
+            throw new AiException($"{p.KeyVariable} doesn't look like an Anthropic API key (those start with sk-ant-). Create one at console.anthropic.com → API keys, set it with setx {p.KeyVariable} \"...\", then start StoryMaker again.");
         return p.Kind switch
         {
             AiKind.Claude => new ClaudeWriter(key!, p.Model.Trim()),

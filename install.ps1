@@ -18,6 +18,9 @@ if ($Remove) {
     return
 }
 
+if (Get-Process StoryMaker -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$target*" }) {
+    throw 'StoryMaker is running. Close it first, then run this again.'
+}
 dotnet publish "$PSScriptRoot\StoryMaker.csproj" -c Release -o $target --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 
