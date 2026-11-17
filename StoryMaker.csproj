@@ -11,6 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- the same icon inside the program, so every window can show it at every size -->
+    <EmbeddedResource Include="StoryMaker.ico" LogicalName="StoryMaker.ico" />
     <PackageReference Include="Anthropic" Version="13.9.0" />
   </ItemGroup>
 

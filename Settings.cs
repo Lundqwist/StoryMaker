@@ -52,6 +52,8 @@ public class Settings
     /// <summary>Character slug -> id of the last session that is in a story.</summary>
     public Dictionary<string, long> Told { get; set; } = [];
     public string LastCharacter { get; set; } = "";
+    /// <summary>"System" (follow Windows), "Light" or "Dark".</summary>
+    public string Theme { get; set; } = "System";
     /// <summary>Extra wishes for the AI, added to every request (optional).</summary>
     public string ExtraInstructions { get; set; } = "";
 

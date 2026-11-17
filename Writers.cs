@@ -176,7 +176,7 @@ public class OllamaWriter(string model, string baseUrl) : IStoryWriter
     {
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
             var json = await Writers.Http.GetFromJsonAsync<JsonObject>(baseUrl.TrimEnd('/') + "/api/tags", cts.Token);
             return (json?["models"] as JsonArray ?? []).Select(m => (string?)m?["name"]).OfType<string>().Order().ToList();
         }

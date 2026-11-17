@@ -27,6 +27,7 @@ if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 $shell = New-Object -ComObject WScript.Shell
 $link = $shell.CreateShortcut($shortcut)
 $link.TargetPath = Join-Path $target 'StoryMaker.exe'
+$link.IconLocation = (Join-Path $target 'StoryMaker.exe') + ',0'
 $link.WorkingDirectory = $target
 $link.Description = 'Write stories from your Lunar Journal and post them to lundqwist.se'
 $link.Save()

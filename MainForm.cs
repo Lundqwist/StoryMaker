@@ -24,7 +24,7 @@ public class MainForm : Form
 
     readonly CheckedListBox sessionList = new() { Dock = DockStyle.Fill, CheckOnClick = true, IntegralHeight = false };
     readonly CheckBox showTold = new() { Text = "Show sessions already in the story", AutoSize = true, Dock = DockStyle.Bottom };
-    readonly Label journalInfo = new() { Dock = DockStyle.Bottom, AutoSize = false, Height = 56, ForeColor = SystemColors.GrayText };
+    readonly Label journalInfo = new() { Dock = DockStyle.Bottom, AutoSize = false, Height = 56, Tag = "muted" };
 
     readonly TextBox wishes = new() { Dock = DockStyle.Top, Multiline = true, Height = 46, ScrollBars = ScrollBars.Vertical, PlaceholderText = "Wishes for this chapter (optional), e.g. \"make it about the night at the Crossroads\"" };
     readonly TextBox chapter = new()
@@ -45,7 +45,7 @@ public class MainForm : Form
         Height = 820;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9.5f);
-        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+        if (Theme.AppIcon is { } icon) Icon = icon;
 
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(6), WrapContents = false };
         top.Controls.AddRange([Lbl("Character"), characterBox, Lbl("AI"), aiBox, Lbl("Model"), modelBox, settingsButton, reloadButton]);
@@ -90,6 +90,8 @@ public class MainForm : Form
         chapter.TextChanged += (_, _) => postButton.Enabled = running is null && chapter.Text.Trim().Length > 0 && journal is not null;
         FormClosing += (_, _) => { running?.Cancel(); settings.Save(); };
 
+        Theme.Choose(settings.Theme);
+        Theme.Apply(this);
         FindJournals();
     }
 
@@ -107,7 +109,7 @@ public class MainForm : Form
         var installed = await OllamaWriter.Installed(string.IsNullOrWhiteSpace(p.BaseUrl) ? OllamaWriter.DefaultUrl : p.BaseUrl);
         if (settings.Ai != kind) return;
         foreach (var m in installed) if (!modelBox.Items.Contains(m)) modelBox.Items.Add(m);
-        if (installed.Count == 0) status.Text = "Ollama isn't running or has no models yet (ollama pull gemma3:12b).";
+        if (installed.Count == 0) status.Text = "Couldn't reach Ollama, or it has no models yet. Start Ollama from the Start menu, or download a model: ollama pull gemma3:12b";
     }
 
     void FindJournals()
@@ -299,6 +301,8 @@ public class MainForm : Form
         if (form.ShowDialog(this) != DialogResult.OK) return;
         settings.Save();
         FillModels();
+        Theme.Choose(settings.Theme);
+        Theme.Apply(this);
         FindJournals();
     }
 }

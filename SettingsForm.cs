@@ -9,7 +9,9 @@ public class SettingsForm : Form
     readonly TextBox site = new() { Width = 520 };
     readonly TextBox tokenVar = new() { Width = 200 };
     readonly TextBox extra = new() { Width = 640, Height = 70, Multiline = true, ScrollBars = ScrollBars.Vertical };
+    readonly ComboBox look = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
     readonly Dictionary<AiKind, (TextBox key, TextBox url, Label found)> ai = [];
+    static readonly string[] Looks = [Theme.System, Theme.Light, Theme.Dark];
 
     public SettingsForm(Settings settings, string? character)
     {
@@ -23,6 +25,7 @@ public class SettingsForm : Form
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         Padding = new Padding(12);
+        if (Theme.AppIcon is { } icon) Icon = icon;
 
         var t = new TableLayoutPanel { AutoSize = true, ColumnCount = 4, Dock = DockStyle.Fill };
         void Row(string label, Control c, Control? after = null, Control? after2 = null)
@@ -40,10 +43,14 @@ public class SettingsForm : Form
         }
         void Note(string text)
         {
-            var l = new Label { Text = text, AutoSize = true, MaximumSize = new Size(820, 0), ForeColor = SystemColors.GrayText };
+            var l = new Label { Text = text, AutoSize = true, MaximumSize = new Size(820, 0), Tag = "muted" };
             t.Controls.Add(l);
             t.SetColumnSpan(l, 4);
         }
+
+        Header("Look");
+        look.Items.AddRange(["Same as Windows", "Light", "Dark"]);
+        Row("Colours", look);
 
         Header("WoW: Forever");
         var browse = new Button { Text = "Browse...", AutoSize = true };
@@ -56,7 +63,7 @@ public class SettingsForm : Form
 
         Header("Website");
         Row("Site address", site);
-        var tokenFound = new Label { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
+        var tokenFound = new Label { AutoSize = true, Padding = new Padding(0, 6, 0, 0), Tag = "keep" };
         Row("Token variable", tokenVar, tokenFound);
         tokenVar.TextChanged += (_, _) => Found(tokenFound, tokenVar.Text, optional: false);
         Note("The token is the site's STORY_TOKEN. It is read from a Windows user environment variable and never stored by this program.");
@@ -71,7 +78,7 @@ public class SettingsForm : Form
             var p = settings.Profile(kind);
             var key = new TextBox { Width = 200, Text = p.KeyVariable };
             var url = new TextBox { Width = 320, Text = p.BaseUrl, Enabled = kind is AiKind.OpenAI or AiKind.OpenAICompatible or AiKind.Ollama };
-            var found = new Label { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
+            var found = new Label { AutoSize = true, Padding = new Padding(0, 6, 0, 0), Tag = "keep" };
             key.TextChanged += (_, _) => Found(found, key.Text, optional: kind is AiKind.OpenAICompatible or AiKind.Ollama);
             Found(found, key.Text, optional: kind is AiKind.OpenAICompatible or AiKind.Ollama);
             ai[kind] = (key, url, found);
@@ -117,10 +124,26 @@ public class SettingsForm : Form
         tokenVar.Text = settings.SiteTokenVariable;
         extra.Text = settings.ExtraInstructions;
         Found(tokenFound, tokenVar.Text, optional: false);
+        look.SelectedIndex = Math.Max(0, Array.IndexOf(Looks, settings.Theme));
+
+        // Changing the look shows it at once in this window
+        void Recolour()
+        {
+            Theme.Apply(this);
+            Found(tokenFound, tokenVar.Text, optional: false);
+            foreach (var (kind, c) in ai) Found(c.found, c.key.Text, optional: kind is AiKind.OpenAICompatible or AiKind.Ollama);
+        }
+        look.SelectedIndexChanged += (_, _) => { Theme.Choose(Looks[look.SelectedIndex]); Recolour(); };
+        Recolour();
 
         FormClosing += (_, _) =>
         {
-            if (DialogResult != DialogResult.OK) return;
+            if (DialogResult != DialogResult.OK)
+            {
+                Theme.Choose(settings.Theme);   // cancelled: back to the saved look
+                return;
+            }
+            settings.Theme = Looks[Math.Max(0, look.SelectedIndex)];
             settings.WtfFolder = wtf.Text.Trim();
             settings.SiteUrl = site.Text.Trim().TrimEnd('/');
             settings.SiteTokenVariable = tokenVar.Text.Trim();
@@ -139,17 +162,17 @@ public class SettingsForm : Form
         if (string.IsNullOrWhiteSpace(variable))
         {
             label.Text = optional ? "no key needed" : "name a variable";
-            label.ForeColor = optional ? SystemColors.GrayText : Color.Firebrick;
+            label.ForeColor = optional ? Theme.Muted : Theme.Bad;
         }
         else if (Settings.Secret(variable) is not null)
         {
             label.Text = "found";
-            label.ForeColor = Color.ForestGreen;
+            label.ForeColor = Theme.Good;
         }
         else
         {
             label.Text = "not set";
-            label.ForeColor = Color.Firebrick;
+            label.ForeColor = Theme.Bad;
         }
     }
 }
