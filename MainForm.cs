@@ -170,7 +170,7 @@ public class MainForm : Form
         var info = journal.Character;
         journalInfo.Text =
             $"{info["name"]}, level {info["level"]} {info["race"]} {info["class"]}{(info["guild"] is { } g ? $" of <{g}>" : "")}. " +
-            $"{journal.Sessions.Count} sessions in the journal, {untold} not in the story yet.\n" +
+            $"{journal.Sessions.Count} {(journal.Sessions.Count == 1 ? "session" : "sessions")} in the journal, {untold} not in the story yet.\n" +
             $"Saved by the game {journal.SavedAt:yyyy-MM-dd HH:mm} (it saves at logout and /reload).";
     }
 
