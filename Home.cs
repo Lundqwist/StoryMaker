@@ -185,16 +185,46 @@ public class HeaderBand : Panel, IThemed
 {
     readonly PictureBox logo = new() { SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(42, 42), Location = new Point(14, 8) };
     readonly Label name = new() { Text = "StoryMaker", AutoSize = true, Font = new Font("Georgia", 17f), Location = new Point(64, 9) };
-    readonly Label sub = new() { Text = "Lunar Journal", AutoSize = true, Font = new Font("Segoe UI", 9f), Location = new Point(66, 37) };
+    readonly Label sub = new() { Text = $"Lunar Journal  ·  v{AppVersion}", AutoSize = true, Font = new Font("Segoe UI", 9f), Location = new Point(66, 37) };
     public readonly Button HomeButton = new() { Text = "Home", AutoSize = true, Padding = new Padding(10, 2, 10, 2) };
+
+    // Buy Me a Coffee, in its own yellow and black (not the theme's colours)
+    public const string CoffeeUrl = "https://buymeacoffee.com/lundqwist";
+    readonly Button coffee = new()
+    {
+        Text = "Buy me a coffee", AutoSize = true, Padding = new Padding(10, 2, 10, 2), Tag = "coffee",
+        FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xFF, 0xDD, 0x00), ForeColor = Color.Black,
+        Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Cursor = Cursors.Hand, UseVisualStyleBackColor = false,
+    };
+
+    /// <summary>"1.0.0", from the program's own version.</summary>
+    public static string AppVersion => typeof(HeaderBand).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "?";
 
     public HeaderBand()
     {
         Dock = DockStyle.Top;
         Height = 58;
         logo.Image = Assets.Get("lundqwist-logo.png");
-        Controls.AddRange([logo, name, sub, HomeButton]);
-        Resize += (_, _) => HomeButton.Location = new Point(ClientSize.Width - HomeButton.Width - 16, (Height - HomeButton.Height) / 2);
+        coffee.FlatAppearance.BorderSize = 0;
+        coffee.FlatAppearance.MouseOverBackColor = Color.FromArgb(0xFF, 0xE6, 0x40);
+        new ToolTip().SetToolTip(coffee, "Like StoryMaker? Buy Lundqwist a coffee: " + CoffeeUrl);
+        coffee.Click += (_, _) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(CoffeeUrl) { UseShellExecute = true });
+        Controls.AddRange([logo, name, sub, HomeButton, coffee]);
+        Resize += (_, _) => Place();
+        HomeButton.VisibleChanged += (_, _) => Place();
+    }
+
+    // Home at the right edge (when shown), the coffee button next to it
+    void Place()
+    {
+        int x = ClientSize.Width - 16;
+        if (HomeButton.Visible)
+        {
+            x -= HomeButton.Width;
+            HomeButton.Location = new Point(x, (Height - HomeButton.Height) / 2);
+            x -= 10;
+        }
+        coffee.Location = new Point(x - coffee.Width, (Height - coffee.Height) / 2);
     }
 
     public void ApplyTheme()
@@ -203,7 +233,7 @@ public class HeaderBand : Panel, IThemed
         logo.BackColor = Theme.Band;
         name.ForeColor = Theme.Accent;
         sub.ForeColor = Theme.Muted;
-        foreach (Control c in Controls) if (c is Button) Theme.PaintControl(c);
+        Theme.PaintControl(HomeButton);   // the coffee button keeps its own colours
         Invalidate();
     }
 

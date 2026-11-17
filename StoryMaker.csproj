@@ -8,6 +8,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- drawn by tools\make-icon.ps1 -->
     <ApplicationIcon>StoryMaker.ico</ApplicationIcon>
+    <!-- the version shown in the program and in the installer's file name (tools\build-package.ps1) -->
+    <Version>1.0.0</Version>
+    <Product>StoryMaker</Product>
+    <Company>Lundqwist</Company>
+    <Copyright>© 2026 Bjarne Lundqwist, MIT license</Copyright>
+    <Description>Turns the Lunar Journal into your World of Warcraft characters' stories</Description>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
