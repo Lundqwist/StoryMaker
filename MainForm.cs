@@ -258,7 +258,8 @@ public class MainForm : Form
         journalInfo.Text =
             $"{info["name"]}, level {info["level"]} {info["race"]} {info["class"]}{(info["guild"] is { } g ? $" of <{g}>" : "")}. " +
             $"{journal.Sessions.Count} {(journal.Sessions.Count == 1 ? "session" : "sessions")} in the journal, {untold} not in the story yet.\n" +
-            $"Saved by the game {journal.SavedAt:yyyy-MM-dd HH:mm} (it saves at logout and /reload).";
+            $"Saved by the game {journal.SavedAt:yyyy-MM-dd HH:mm} (it saves at logout and /reload)." +
+            (journal.StoryInstructions.Length > 0 ? " Story instructions from the game (/lj settings) are used." : "");
     }
 
     List<JsonObject> Ticked() => sessionList.CheckedItems.OfType<SessionItem>().Select(i => i.Session).ToList();
@@ -345,7 +346,7 @@ public class MainForm : Form
             }
 
             Busy($"Writing with {AiProfile.Title(profile.Kind).Split(' ')[0]} ({profile.Model})... this can take a minute or two.");
-            var user = StoryPrompt.User(journal.Digest(sessions), previous, (settings.ExtraInstructions + "\n" + wishes.Text).Trim());
+            var user = StoryPrompt.User(journal.Digest(sessions), previous, (settings.ExtraInstructions + "\n" + wishes.Text).Trim(), journal.StoryInstructions);
             var started = DateTime.Now;
             ShowEditor();
             // AIs that stream (Ollama) show the chapter as it is written

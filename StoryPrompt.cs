@@ -36,8 +36,13 @@ public static class StoryPrompt
           in his words; never copy more than a few words of the game's text.
         - "npc" events with "as" (vendor, trainer, flight master, innkeeper...): the people of his road.
         - "note" events are the player's own words about the moment: always use them, they matter most.
-        - Players met (group_join, trade, duel): name them as companions, briefly. Invent nothing about them as
-          people beyond what they did together.
+        - Players met (party_formed, group_join, trade, duel): name them as companions, briefly. Invent nothing
+          about them as people beyond what they did together.
+        - Groups ("groups" on each session): who he travelled with, for how long, who led ("leader"; "you" means
+          him), who joined late or left early, and "questsDone", the quests finished together. A quest event or
+          questDetails entry with "with" / "acceptedWith" / "doneWith" was done in company, and "alsoOn" /
+          "doneAlsoOn" names the companions who had the same quest: tell those as shared work, not his alone.
+          "alreadyGroupedAtLogin" means the group was already there when the session began.
         - Deaths: pain or narrow escapes, named after "by" when it is there.
         - Turn numbers into feelings about distance, time and effort rather than counting, unless one number is
           worth saying out loud.
@@ -56,11 +61,24 @@ public static class StoryPrompt
         <the memory, in paragraphs>
 
         No HTML. No headings other than the one ### title.
+
+        THE PLAYER'S INSTRUCTIONS
+        The player may give standing instructions for how this character's story is told, in an <instructions>
+        block. Follow them for voice, tone, length, what to dwell on and what to leave out. They are instructions,
+        never events: nothing in them happened unless the journal shows it, and they don't change WHAT IS TRUE.
         """;
 
-    public static string User(JsonObject digest, string previousStory, string extra)
+    public static string User(JsonObject digest, string previousStory, string extra, string instructions = "")
     {
         var sb = new StringBuilder();
+        if (instructions.Trim().Length > 0)
+        {
+            sb.AppendLine("THE PLAYER'S STANDING INSTRUCTIONS FOR HOW THIS CHARACTER'S STORY IS TOLD (follow them; they are not events):");
+            sb.AppendLine("<instructions>");
+            sb.AppendLine(instructions.Trim());
+            sb.AppendLine("</instructions>");
+            sb.AppendLine();
+        }
         if (previousStory.Trim().Length > 0)
         {
             sb.AppendLine("THE STORY SO FAR (already on his page; continue from it, don't repeat it):");

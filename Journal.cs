@@ -148,6 +148,12 @@ public class Journal
     public List<JsonObject> Sessions { get; init; } = [];
     public DateTime SavedAt { get; init; }
 
+    /// <summary>
+    /// How the player wants this character's story told, typed in the addon's settings window
+    /// (/lj settings). Kept apart from the journal: these are instructions, not things that happened.
+    /// </summary>
+    public string StoryInstructions { get; init; } = "";
+
     /// <summary>Every LunarJournal.lua under WTF\Account\&lt;account&gt;\&lt;realm&gt;\&lt;character&gt;\SavedVariables.</summary>
     public static List<JournalFile> Find(string wtfAccountFolder)
     {
@@ -196,6 +202,7 @@ public class Journal
             Quests = db["quests"] as JsonObject ?? new JsonObject(),
             Sessions = (db["sessions"] as JsonArray ?? []).OfType<JsonObject>().ToList(),
             SavedAt = System.IO.File.GetLastWriteTime(file.Path),
+            StoryInstructions = (db["storyInstructions"] as JsonValue)?.TryGetValue<string>(out var si) == true ? si.Trim() : "",
         };
     }
 
@@ -259,6 +266,7 @@ public class Journal
                 ["gathered"] = s["gathered"]?.DeepClone(),
                 ["npcsTalkedTo"] = s["npcs"]?.DeepClone(),
                 ["playersMet"] = s["players"]?.DeepClone(),
+                ["groups"] = Groups(s["parties"]),
                 ["moneyGainedCopper"] = s["moneyGained"]?.DeepClone(),
                 ["moneySpentCopper"] = s["moneySpent"]?.DeepClone(),
                 ["questDetails"] = quests,
@@ -272,6 +280,39 @@ public class Journal
             ["info"] = Character.DeepClone(),
             ["sessions"] = list,
         };
+    }
+
+    /// <summary>The session's groups: who was in each, when, who led it, the quests done together.</summary>
+    static JsonArray Groups(JsonNode? parties)
+    {
+        string Time(JsonNode? t) => $"{When(Num(t)):yyyy-MM-dd HH:mm}";
+        var list = new JsonArray();
+        foreach (var p in (parties as JsonArray ?? []).OfType<JsonObject>())
+        {
+            var members = new JsonObject();
+            foreach (var m in p["members"] as JsonObject ?? [])
+            {
+                var copy = m.Value is JsonObject o ? (JsonObject)o.DeepClone() : new JsonObject();
+                if (copy["joined"] is { } j) copy["joined"] = Time(j);
+                if (copy["left"] is { } l) copy["left"] = Time(l);
+                members[m.Key] = copy;
+            }
+            list.Add(new JsonObject
+            {
+                ["start"] = Time(p["start"]),
+                ["stop"] = Time(p["stop"]),
+                ["realMinutes"] = (Num(p["stop"]) - Num(p["start"])) / 60,
+                ["raid"] = p["raid"]?.DeepClone() ?? false,
+                ["leader"] = p["leader"]?.DeepClone(),   // "you" = the character himself
+                ["alreadyGroupedAtLogin"] = p["atLogin"]?.DeepClone() ?? false,
+                ["zone"] = p["zone"]?.DeepClone(),
+                ["subZone"] = p["subZone"]?.DeepClone(),
+                ["members"] = members,
+                ["questsAccepted"] = p["questsAccepted"] as JsonArray is { } qa ? qa.DeepClone() : new JsonArray(),
+                ["questsDone"] = p["questsDone"] as JsonArray is { } qd ? qd.DeepClone() : new JsonArray(),
+            });
+        }
+        return list;
     }
 
     static JsonObject Minutes(JsonNode? map)
